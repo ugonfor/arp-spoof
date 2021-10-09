@@ -59,10 +59,12 @@ struct EthIpPacket{
 extern Mac myMac;
 extern Ip myIp;
 
-
-
 // MAC/IP Address Related
 Mac GetMyMac(char* dev);
 Ip GetMyIp(char* dev);
-
 Mac GetMacfromIp(pcap_t* handle, Ip tip);
+
+// ARP table infection
+#define ARP_REP_TYPE 0
+#define ARP_REQ_TYPE 1
+bool ArpInfection( Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac, int type);

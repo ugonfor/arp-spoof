@@ -51,6 +51,11 @@ int main(int argc, char* argv[])
     std::cout << "target    IP  :" << std::string(target_ip) << "\n";
 
     // ARP infection
+    if(ArpInfection( sender_ip, sender_mac, target_ip, target_mac, ARP_REP_TYPE) != true){
+        std::cerr << "Arp Infection failed (" << std::string(sender_ip) << ", " << std::string(sender_mac) 
+            << ") -> (" << std::string(target_ip) << ", " << std::string(target_mac) << ") type(" <<  ARP_REP_TYPE <<")\n";
+        return -1;
+    }
 
     // IP Packet Relay    
     

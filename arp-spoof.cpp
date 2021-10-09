@@ -1,5 +1,33 @@
 #include "arp-spoof.h"
 
+void MakeEthArpPkt(EthArpPacket* lp_arp_pkt, Mac eth_dmac, Mac eth_smac, Mac arp_tmac , Ip arp_tip, Mac arp_smac, Ip arp_sip ,int type){
+    // arp packet for arp request
+    // eth_dmac : broadcast
+    lp_arp_pkt->eth_.dmac_ = eth_dmac;
+    lp_arp_pkt->eth_.smac_ = eth_smac;
+    lp_arp_pkt->eth_.type_ = htons(EthHdr::Arp);
+    
+	lp_arp_pkt->arp_.hrd_ = htons(ArpHdr::ETHER);
+	lp_arp_pkt->arp_.pro_ = htons(EthHdr::Ip4);
+	lp_arp_pkt->arp_.hln_ = Mac::SIZE;
+	lp_arp_pkt->arp_.pln_ = Ip::SIZE;
+
+    // arp request / reply
+	if(type==ARP_REP_TYPE) lp_arp_pkt->arp_.op_ = htons(ArpHdr::Reply);
+	else if(type==ARP_REQ_TYPE) lp_arp_pkt->arp_.op_ = htons(ArpHdr::Request);
+    else {
+        fprintf(stderr, "Wrong Arp type on MakeEthArpPkt\n");
+        exit(-1);
+    }
+
+	lp_arp_pkt->arp_.smac_ = arp_smac;
+	lp_arp_pkt->arp_.sip_ = htonl(arp_sip); // why only myIp doesn't work?
+    // reply dmac
+	lp_arp_pkt->arp_.tmac_ = arp_tmac;
+	lp_arp_pkt->arp_.tip_ = htonl(arp_tip); // why only myIp doesn't work?
+    return ;
+}
+
 Mac GetMyMac(char* dev){
 	struct ifreq s;
 	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -43,23 +71,11 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
     // std::cout << "My        IP  :" << std::string(myIp) << "\n";
     
     // arp packet for arp request
-    // eth_dmac : broadcast
-    arp_pkt.eth_.dmac_ = Mac("FF:FF:FF:FF:FF:FF");
-    arp_pkt.eth_.smac_ = myMac;
-    arp_pkt.eth_.type_ = htons(EthHdr::Arp);
-    
-	arp_pkt.arp_.hrd_ = htons(ArpHdr::ETHER);
-	arp_pkt.arp_.pro_ = htons(EthHdr::Ip4);
-	arp_pkt.arp_.hln_ = Mac::SIZE;
-	arp_pkt.arp_.pln_ = Ip::SIZE;
+    // eth_dmac : broadcast, arp_tmac : unknown
     // arp request
-	arp_pkt.arp_.op_ = htons(ArpHdr::Request);
-	arp_pkt.arp_.smac_ = Mac(myMac);
-	arp_pkt.arp_.sip_ = htonl(Ip(myIp)); // why only myIp doesn't work?
-    // reply dmac
-	arp_pkt.arp_.tmac_ = Mac("00:00:00:00:00:00");
-	arp_pkt.arp_.tip_ = htonl(Ip(tip)); // why only myIp doesn't work?
-
+    MakeEthArpPkt(&arp_pkt, Mac("FF:FF:FF:FF:FF:FF"), myMac,
+                    Mac("00:00:00:00:00:00"), tip, myMac, myIp, ARP_REQ_TYPE);
+    
     std::thread t1([](pcap_t* handle, EthArpPacket* lparp_pkt){
         int cnt = 0;
         while (tmac.isNull())
@@ -108,4 +124,9 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
     t2.join();
     
     return tmac;
+}
+
+
+bool ArpInfection( Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac, int type){
+    return true;
 }
