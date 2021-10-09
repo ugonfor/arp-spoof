@@ -33,12 +33,14 @@ Ip GetMyIp(char* dev){
 }
 
 Mac GetMacfromIp(pcap_t* handle, Ip tip){
-    static Mac tmac;
+    static Mac tmac; // why static Mac tmac = Mac::nullMac() doesn't work?
+    tmac = Mac::nullMac(); 
+    
     EthArpPacket arp_pkt;
 
     // logging
-    std::cout << "My        Mac :" << std::string(myMac) << "\n";
-    std::cout << "My        IP  :" << std::string(myIp) << "\n";
+    // std::cout << "My        Mac :" << std::string(myMac) << "\n";
+    // std::cout << "My        IP  :" << std::string(myIp) << "\n";
     
     // arp packet for arp request
     // eth_dmac : broadcast
@@ -53,10 +55,10 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
     // arp request
 	arp_pkt.arp_.op_ = htons(ArpHdr::Request);
 	arp_pkt.arp_.smac_ = Mac(myMac);
-	arp_pkt.arp_.sip_ = Ip(myIp); // why only myIp doesn't work?
+	arp_pkt.arp_.sip_ = htonl(Ip(myIp)); // why only myIp doesn't work?
     // reply dmac
 	arp_pkt.arp_.tmac_ = Mac("00:00:00:00:00:00");
-	arp_pkt.arp_.tip_ = Ip(tip);
+	arp_pkt.arp_.tip_ = htonl(Ip(tip)); // why only myIp doesn't work?
 
     std::thread t1([](pcap_t* handle, EthArpPacket* lparp_pkt){
         int cnt = 0;
@@ -67,11 +69,11 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
             if (res != 0) {
                 fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
             }
-            std::this_thread::sleep_for(std::chrono::seconds(3));
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             
             if (++cnt == 5){
                 fprintf(stderr, "Cannot get target mac address (at sendpacket)\n");
-                break;
+                exit(-1);
             }
         }
     }, handle, &arp_pkt);
@@ -95,7 +97,6 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
             if (_recv_packet->eth_.type() == EthHdr::Arp){
                 if (_recv_packet->arp_.op() == ArpHdr::Reply && _recv_packet->arp_.sip() == tip){
                     tmac = _recv_packet->arp_.smac();
-                    printf("CATCH");
                     break;
                 }
             }
@@ -105,6 +106,6 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
     
     t1.join();
     t2.join();
-
+    
     return tmac;
 }

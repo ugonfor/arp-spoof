@@ -1,5 +1,3 @@
-#pragma once
-
 // custom header files
 #include "header/arphdr.h"
 #include "header/ethhdr.h"
@@ -58,14 +56,13 @@ struct EthIpPacket{
 #pragma pack(pop)
 
 // Packet Related
+extern Mac myMac;
+extern Ip myIp;
 
 
 
 // MAC/IP Address Related
 Mac GetMyMac(char* dev);
 Ip GetMyIp(char* dev);
-
-static Mac myMac;
-static Ip myIp;
 
 Mac GetMacfromIp(pcap_t* handle, Ip tip);

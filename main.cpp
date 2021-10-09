@@ -1,5 +1,8 @@
 #include "arp-spoof.h"
 
+Mac myMac;
+Ip myIp;
+
 void usage(char* argv[]){
     printf("syntax : %s <interface> <sender ip 1> <target ip 1> [<sender ip 2> <target ip 2>...]\n", argv[0]);
     printf("sample : %s wlan0 192.168.10.2 192.168.10.1 192.168.10.1 192.168.10.2\n", argv[0]);
@@ -35,13 +38,15 @@ int main(int argc, char* argv[])
     Ip sender_ip = Ip(argv[2]);
     Mac sender_mac = GetMacfromIp(handle, sender_ip);
 
+    // information logging
+    std::cout << "sender    Mac :" << std::string(sender_mac) << "\n";
+    std::cout << "sender    IP  :" << std::string(sender_ip) << "\n";
+
     // get target IP/MAC address 
     Ip target_ip = Ip(argv[3]);
     Mac target_mac = GetMacfromIp(handle, target_ip);
 
     // information logging
-    std::cout << "sender    Mac :" << std::string(sender_mac) << "\n";
-    std::cout << "sender    IP  :" << std::string(sender_ip) << "\n";
     std::cout << "target    Mac :" << std::string(target_mac) << "\n";
     std::cout << "target    IP  :" << std::string(target_ip) << "\n";
 
