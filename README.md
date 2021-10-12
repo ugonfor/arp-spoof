@@ -10,3 +10,5 @@ Arp spoofing Application
 * IP 패킷과 ARP 패킷을 따로 처리를 해주는 것이 과제의 핵심
 * Flow를 관리하기 위해서 std::vector, std::map, list 등 사용 하는 데... 이 부분 가장 중요
 * TCP, HTTP 잘 이동하는 지 확인
+
+* 동글이 Ubuntu에 집어 넣는 법 `https://askubuntu.com/questions/1162974/wireless-usb-adapter-0bdac811-realtek-semiconductor-corp` 보고 해보니 성공!
