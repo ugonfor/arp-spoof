@@ -12,6 +12,7 @@
 #include <string>
 #include <thread>
 #include <stdint.h>
+#include <signal.h>
 
 // for struct ifreq, socket, ioctl
 #include <linux/if.h>
@@ -58,6 +59,17 @@ struct EthIpPacket{
 // Packet Related
 extern Mac myMac;
 extern Ip myIp;
+extern pcap_t* handle;
+extern Ip sender_ip;
+extern Mac sender_mac;
+extern Ip target_ip;
+extern Mac target_mac;
+
+
+#define ARP_REP_TYPE 0
+#define ARP_REQ_TYPE 1
+void MakeEthArpPkt(EthArpPacket* lp_arp_pkt, Mac eth_smac, Mac eth_dmac, Mac arp_smac, Ip arp_sip , Mac arp_tmac , Ip arp_tip, int type);
+
 
 // MAC/IP Address Related
 Mac GetMyMac(char* dev);
@@ -65,6 +77,10 @@ Ip GetMyIp(char* dev);
 Mac GetMacfromIp(pcap_t* handle, Ip tip);
 
 // ARP table infection
-#define ARP_REP_TYPE 0
-#define ARP_REQ_TYPE 1
-bool ArpInfection( Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac, int type);
+bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, int type);
+
+// Ip Relay
+bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac);
+
+// Sig handler
+void SigINTHandler(int sig);

