@@ -13,6 +13,7 @@
 #include <thread>
 #include <stdint.h>
 #include <signal.h>
+#include <queue>
 
 // for struct ifreq, socket, ioctl
 #include <linux/if.h>
@@ -78,6 +79,9 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip);
 
 // ARP table infection
 bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, int type);
+
+// Arp Infection
+void PeriodicInfection(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip);
 
 // Ip Relay
 bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac);

@@ -66,8 +66,13 @@ int main(int argc, char* argv[])
     // SIGINT
     signal(SIGINT, SigINTHandler);
 
+    // arp infection
+    std::thread infect_thread(PeriodicInfection, handle, sender_ip, sender_mac, target_ip);
+
     // IP Packet Relay    
     IpPacketRelay(handle, sender_ip, sender_mac, target_ip, target_mac);
     
+    infect_thread.join();
+
     return 0;
 }

