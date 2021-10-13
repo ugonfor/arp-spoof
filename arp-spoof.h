@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <queue>
+#include <map>
 
 // for struct ifreq, socket, ioctl
 #include <linux/if.h>
@@ -61,10 +62,9 @@ struct EthIpPacket{
 extern Mac myMac;
 extern Ip myIp;
 extern pcap_t* handle;
-extern Ip sender_ip;
-extern Mac sender_mac;
-extern Ip target_ip;
-extern Mac target_mac;
+
+extern std::map<Ip, Mac> ArpTable;
+extern std::map<Ip, Ip> Send2Tar;
 
 
 #define ARP_REP_TYPE 0
@@ -81,10 +81,10 @@ Mac GetMacfromIp(pcap_t* handle, Ip tip);
 bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, int type);
 
 // Arp Infection
-void PeriodicInfection(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip);
+void PeriodicInfection(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> ArpTable);
 
 // Ip Relay
-bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac);
+bool IpPacketRelay(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> ArpTable);
 
 // Sig handler
 void SigINTHandler(int sig);

