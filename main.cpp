@@ -66,13 +66,8 @@ int main(int argc, char* argv[])
     // SIGINT
     signal(SIGINT, SigINTHandler);
 
-
-
     // IP Packet Relay    
-    while (1)
-    {
-        /* code */
-    }
+    IpPacketRelay(handle, sender_ip, sender_mac, target_ip, target_mac);
     
     return 0;
 }
