@@ -29,7 +29,7 @@ sample : ./arp-spoof wlan0 192.168.10.2 192.168.10.1 192.168.10.1 192.168.10.2
 ### Reply
 ![image](https://user-images.githubusercontent.com/56115311/137070343-74593284-050b-4a7a-981e-19e144223d3f.png)
 
-### Caution!
+## Caution!
 * resolving은 2번으로 해결할 것.
 * VM으로 실행할 때, Host ARP Table 처리
 * Threading을 통해서 동시에 처리할 것
@@ -40,3 +40,12 @@ sample : ./arp-spoof wlan0 192.168.10.2 192.168.10.1 192.168.10.1 192.168.10.2
 * TCP, HTTP 잘 이동하는 지 확인
 
 * 동글이 Ubuntu에 집어 넣는 법 `https://askubuntu.com/questions/1162974/wireless-usb-adapter-0bdac811-realtek-semiconductor-corp` 보고 해보니 성공!
+
+## Code Review
+* Send2Tar 를 제대로 바꿀 것 (하나의 sender에 여러개의 target이 들어오는 경우를 처리해야 함.)
+* MTU를 고려해서 조금씩 나눠서 TCP 보낼 것
+* exit(0)으로 끝내는 것이 아니라 while문들을 exit_flag로 지정할 것
+* producer-consumer thread 방법 찾아서 적용해볼 것
+* WaitForSingleObjecty(aka WaitEvent)? alternative 라는 것을 thread sleep 대신 사용할 것
+* find가 너무 많이 사용됨. std::map에서 []도 find사용되는 데 iterator로 처리
+* gateway에서 sender_ip의 처리도 고칠 것
